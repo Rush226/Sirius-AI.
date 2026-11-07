@@ -87,3 +87,103 @@ app.post("/chat", async (req, res) => {
 app.listen(PORT, "0.0.0.0", () => {
   console.log(`Sirius AI is running on port ${PORT}`);
 });
+
+// Telegram integration
+const TELEGRAM_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
+
+if (TELEGRAM_TOKEN) {
+  let telegramOffset = 0;
+  const chatHistories = new Map();
+
+  async function telegramRequest(method, body = {}) {
+    const response = await fetch(
+      `https://api.telegram.org/bot${TELEGRAM_TOKEN}/${method}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body)
+      }
+    );
+
+    return response.json();
+  }
+
+  async function handleTelegramMessage(message) {
+    if (!message.text || message.from?.is_bot) return;
+
+    const chatId = message.chat.id;
+    const userText = message.text;
+
+    const history = chatHistories.get(chatId) || [];
+
+    try {
+      const aiResponse = await fetch(
+        `http://127.0.0.1:${PORT}/chat`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            message: userText,
+            history
+          })
+        }
+      );
+
+      const data = await aiResponse.json();
+
+      if (!aiResponse.ok || !data.reply) {
+        throw new Error("AI response failed");
+      }
+
+      history.push(
+        { role: "user", parts: [{ text: userText }] },
+        { role: "model", parts: [{ text: data.reply }] }
+      );
+
+      chatHistories.set(chatId, history.slice(-10));
+
+      await telegramRequest("sendMessage", {
+        chat_id: chatId,
+        text: data.reply.slice(0, 4000)
+      });
+
+    } catch (error) {
+      console.error("Telegram error:", error);
+      await telegramRequest("sendMessage", {
+        chat_id: chatId,
+        text: "Кажется, мой мозг немного завис. Попробуй ещё раз позже 😅"
+      });
+    }
+  }
+
+  async function startTelegram() {
+    console.log("Sirius Telegram is starting...");
+
+    while (true) {
+      try {
+        const updates = await telegramRequest("getUpdates", {
+          offset: telegramOffset,
+          timeout: 30,
+          allowed_updates: ["message"]
+        });
+
+        if (updates.ok) {
+          for (const update of updates.result) {
+            telegramOffset = update.update_id + 1;
+
+            if (update.message) {
+              await handleTelegramMessage(update.message);
+            }
+          }
+        }
+      } catch (error) {
+        console.error("Telegram polling error:", error);
+        await new Promise(resolve => setTimeout(resolve, 5000));
+      }
+    }
+  }
+
+  startTelegram();
+} else {
+  console.log("Telegram token is missing");
+}
