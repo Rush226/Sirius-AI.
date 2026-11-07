@@ -72,9 +72,9 @@ let lastError;
 
 for (let attempt = 1; attempt <= 3; attempt++) {
   try {
-    response = await ai.models.generateContent({
-      const startTime = Date.now();
+    const startTime = Date.now();
 console.log("Gemini request started");
+    response = await ai.models.generateContent({
       model: "gemini-3.8-flash",
       contents: [
         ...history,
@@ -87,7 +87,7 @@ console.log("Gemini request started");
         systemInstruction: SIRIUS_PERSONALITY
       }
     });
-
+console.log("Gemini response received in", Date.now() - startTime, "ms");
     break;
   } catch (error) {
     lastError = error;
