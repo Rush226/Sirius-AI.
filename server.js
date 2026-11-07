@@ -57,7 +57,12 @@ app.post("/chat", async (req, res) => {
       });
     }
 
-    const response = await ai.models.generateContent({
+    let response;
+let lastError;
+
+for (let attempt = 1; attempt <= 3; attempt++) {
+  try {
+    response = await ai.models.generateContent({
       model: "gemini-3.8-flash",
       contents: [
         ...history,
@@ -70,6 +75,21 @@ app.post("/chat", async (req, res) => {
         systemInstruction: SIRIUS_PERSONALITY
       }
     });
+
+    break;
+  } catch (error) {
+    lastError = error;
+    console.error(`Gemini attempt ${attempt} failed:`, error);
+
+    if (attempt < 3) {
+      await new Promise(resolve => setTimeout(resolve, attempt * 3000));
+    }
+  }
+}
+
+if (!response) {
+  throw lastError;
+}
 
     res.json({
       reply: response.text
