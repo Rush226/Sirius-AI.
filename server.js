@@ -142,6 +142,16 @@ if (TELEGRAM_TOKEN) {
 
   async function handleTelegramMessage(message) {
     if (!message.text || message.from?.is_bot) return;
+    
+    // В группах отвечаем только на обращение Sirius
+    if (
+        message.chat.type === "group" ||
+        message.chat.type === "supergroup"
+    ) {
+        if (!/\bsirius\b/i.test(message.text)) {
+            return;
+        }
+    }
 
     const chatId = message.chat.id;
     const userText = message.text;
